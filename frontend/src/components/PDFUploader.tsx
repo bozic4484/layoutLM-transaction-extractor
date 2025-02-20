@@ -3,18 +3,13 @@ import axios from 'axios';
 import { ProcessingStatus } from './ProcessingStatus';
 import { ResultDisplay } from './ResultDisplay';
 import { UploadError } from './UploadError';
-
-interface ProcessedResult {
-  page: number;
-  texts: string[];
-  boxes: number[][];
-  prediction: number;
-}
+import { ProcessedResult } from '../types';
 
 export const PDFUploader: React.FC = () => {
   const [results, setResults] = useState<ProcessedResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [format, setFormat] = useState<'json' | 'csv'>('json');
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -31,12 +26,23 @@ export const PDFUploader: React.FC = () => {
     formData.append('file', file);
 
     try {
-      const response = await axios.post('http://localhost:8000/process-pdf', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      setResults(response.data.result);
+      if (format === 'csv') {
+        const response = await axios.post('http://localhost:8000/process-pdf?format=csv', formData, {
+          responseType: 'blob',
+        });
+        
+        // Create download link for CSV
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'transactions.csv');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        const response = await axios.post('http://localhost:8000/process-pdf?format=json', formData);
+        setResults(response.data.result);
+      }
     } catch (error) {
       setError('Error processing PDF. Please try again.');
       console.error('Error processing PDF:', error);
@@ -51,6 +57,16 @@ export const PDFUploader: React.FC = () => {
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Upload PDF Document
         </label>
+        <div className="flex gap-4 mb-4">
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value as 'json' | 'csv')}
+            className="block w-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="json">JSON Format</option>
+            <option value="csv">CSV Format</option>
+          </select>
+        </div>
         <input
           type="file"
           accept=".pdf"
@@ -67,7 +83,7 @@ export const PDFUploader: React.FC = () => {
 
       {loading && <ProcessingStatus />}
       {error && <UploadError message={error} />}
-      {results.length > 0 && <ResultDisplay results={results} />}
+      {format === 'json' && results.length > 0 && <ResultDisplay results={results} />}
     </div>
   );
 }; 

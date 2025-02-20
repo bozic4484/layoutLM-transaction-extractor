@@ -1,6 +1,7 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pdf_processor import PDFProcessor
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 app = FastAPI()
 
@@ -16,7 +17,21 @@ app.add_middleware(
 pdf_processor = PDFProcessor()
 
 @app.post("/process-pdf")
-async def process_pdf(file: UploadFile = File(...)):
+async def process_pdf(
+    file: UploadFile = File(...),
+    format: str = Query("json", enum=["json", "csv"])
+):
     content = await file.read()
     result = await pdf_processor.process_pdf(content)
-    return {"result": result} 
+    
+    if format == "csv":
+        csv_content = pdf_processor.export_to_csv(result)
+        return PlainTextResponse(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment;filename=transactions.csv"
+            }
+        )
+    
+    return JSONResponse(content={"result": result}) 
